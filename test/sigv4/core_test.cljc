@@ -29,12 +29,23 @@
 (deftest object-path-is-path-style-and-per-segment
   (is (= "/bucket/a/b/c.txt" (v4/object-path "bucket" "a/b/c.txt")))
   (is (= "/bucket/a%20b/c%2Bd" (v4/object-path "bucket" "a b/c+d")))
+  (testing "a colon inside a segment is encoded, the slashes are not
+            (shoko keys DID documents as pins/did:key/…)"
+    (is (= "/my-bucket/pins/did%3Akey/abc.json"
+           (v4/object-path "my-bucket" "pins/did:key/abc.json"))))
+  (testing "a trailing slash is a real empty final segment, not something to drop
+            — kotobase-peer's copy split without a limit and silently lost it"
+    (is (= "/bucket/dir/" (v4/object-path "bucket" "dir/"))))
   (testing "a blank key degrades to the bucket path (used by ListObjectsV2)"
     (is (= "/bucket" (v4/object-path "bucket" nil)))
     (is (= "/bucket" (v4/object-path "bucket" "")))))
 
 (deftest canonical-query-sorts-by-encoded-key
   (is (= "" (v4/canonical-query nil)))
+  (is (= "" (v4/canonical-query {})))
+  (testing "keyword keys work too — shoko passes {:prefix … :list-type …}"
+    (is (= "list-type=2&prefix=a%2Fb"
+           (v4/canonical-query {:prefix "a/b" :list-type "2"}))))
   (is (= "a=1&b=2" (v4/canonical-query {"b" "2" "a" "1"})))
   (is (= "list-type=2&prefix=a%2Fb" (v4/canonical-query {"prefix" "a/b" "list-type" "2"}))))
 

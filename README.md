@@ -15,26 +15,48 @@ surface in this workspace.
 
 ## Why this exists
 
-SigV4 was implemented **eight times** across this workspace before this library:
+SigV4 was implemented **six times** across this workspace. Every one of them
+now depends on this library instead:
 
-| Copy | |
+| Implementation | Was |
 |---|---|
-| `gftdcojp/net-kotobase` `kotobase.sigv4` | the original |
-| `gftdcojp/net-kotobase-ipfs` `kotobase-ipfs.sigv4` | documented verbatim copy of it |
-| `kotoba-lang/kotobase-peer` `object-store.s3-sigv4` | |
-| `kotoba-lang/kotobase-peer-atomic` | byte-identical to the above |
-| `kotoba-lang/kotobase-peer-main-test` | byte-identical to the above |
+| `gftdcojp/net-kotobase` `kotobase.sigv4` | the original; the other five descend from it |
+| `gftdcojp/net-kotobase-ipfs` `kotobase-ipfs.sigv4` | a verbatim copy, so documented in its own docstring |
+| `kotoba-lang/kotobase-peer` `object-store.s3-sigv4` | an edited copy |
 | `kotoba-lang/kotobase-protocols-worker` `sigv4` | the verification side |
-| `kotoba-lang/kotobase-protocols` `protocols.s3` | |
-| `kotoba-lang/io-storj` | now depends on this library instead |
+| `kotoba-lang/shoko` `archiveport` | a JVM port, written because the original was cljs-only |
+| `kotoba-lang/io-storj` | written fresh, two days before this library |
 
-Each was a locally correct decision — `net-kotobase-ipfs` copied rather than
-depended precisely to stay single-purpose and low-privilege. The cost only
-shows up in aggregate: **the copies had already diverged.** The verification
-side percent-encodes with `charCodeAt`, so it emits UTF-16 code units and signs
-any non-ASCII key or query value differently from AWS and from every S3 SDK —
-a defect the signing copies do not share. Eight implementations means eight
-places for that to be true and one place where anyone would notice.
+Each was a locally correct decision. `net-kotobase-ipfs` copied rather than
+depended precisely to stay single-purpose and low-privilege; `shoko` ported to
+the JVM because a ClojureScript signer cannot be `require`d from one. The cost
+only shows up in aggregate: **they had already diverged, and each in a way its
+own repo could never notice.**
+
+- `kotobase-protocols-worker` percent-encoded with `charCodeAt`, emitting UTF-16
+  code units — so any non-ASCII key or query value signed differently from AWS
+  and from every S3 SDK. It is the *verifying* side, so it would have rejected
+  correctly-signed requests.
+- `kotobase-peer` split keys without a trailing-empty limit, so a key ending in
+  `/` signed as a different key than it addressed.
+- Four of the six used `encodeURIComponent` with a manual `!'()*` fixup; only
+  `shoko` encoded from UTF-8 bytes, which is the correct rule.
+
+Four of the six had **no test of their signing at all**. `kotobase-peer` had
+2278 lines of object-store tests without one assertion about an `Authorization`
+header; `net-kotobase`, which held the implementation the others copied, had 25
+proxy tests and none that looked at a signature. A signer nobody exercises
+drifts, and the only symptom is an opaque `403 SignatureDoesNotMatch` at some
+later date.
+
+Two things previously reported as duplicates are not, and are recorded here so
+the count stops being repeated:
+
+- `kotobase-peer-atomic` and `kotobase-peer-main-test` are **git worktrees of
+  `kotobase-peer`**, not separate repositories. The "three byte-identical
+  copies" were one file seen through three checkouts.
+- `kotobase-protocols` `protocols.s3` only *mentions* SigV4, as explicitly out
+  of scope. It never implemented it.
 
 ## Usage
 
