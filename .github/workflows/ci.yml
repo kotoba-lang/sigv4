@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  KOTOBA_VERSION: v0.6.29
+
+jobs:
+  jvm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeLaGuardo/setup-clojure@13.4
+        with:
+          cli: latest
+      - run: clojure -M:lint
+      - run: clojure -M:test
+
+  cljs:
+    # WebCrypto is asynchronous, so the ClojureScript path is genuinely
+    # different code from the JVM one — and Workers are where most consumers of
+    # this library run. A green JVM suite is not evidence for it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install -g nbb
+      - run: nbb scripts/verify-cljs.cljs
+
+  kotoba:
+    # Compile the Kotoba percent-encoder with the checksum-verified released
+    # native CLI and require it to agree byte for byte with sigv4.core.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install -g nbb
+      - name: Fetch and verify the released Kotoba CLI
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/kotoba"
+          mkdir -p "$dir"
+          base="https://github.com/kotoba-lang/kotoba/releases/download/${KOTOBA_VERSION}"
+          curl -L --fail --silent --show-error -o "$dir/kotoba.tar.gz" \
+            "$base/kotoba-linux-amd64.tar.gz"
+          curl -L --fail --silent --show-error -o "$dir/kotoba.tar.gz.sha256" \
+            "$base/kotoba-linux-amd64.tar.gz.sha256"
+          # the published .sha256 names the release asset, not our local filename
+          expected="$(cut -d' ' -f1 < "$dir/kotoba.tar.gz.sha256")"
+          echo "$expected  $dir/kotoba.tar.gz" | sha256sum -c -
+          tar -xzf "$dir/kotoba.tar.gz" -C "$dir"
+      - name: Emit the Kotoba module
+        run: |
+          set -euo pipefail
+          mkdir -p target
+          "$RUNNER_TEMP/kotoba/kotoba" wasm emit kotoba/pct_encode.kotoba \
+            --package-lock kotoba.lock.edn --output target/pct_encode.wasm --json
+      - name: Kotoba/Wasm vs Clojure parity
+        run: nbb scripts/verify-kotoba.cljs
