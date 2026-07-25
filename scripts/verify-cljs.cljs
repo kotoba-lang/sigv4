@@ -17,6 +17,7 @@
 (require '[sigv4.core :as v4]
          '[sigv4.crypto :as crypto]
          '[sigv4.protocols :as p]
+         '[sigv4.request :as req]
          '[sigv4.verify :as verify])
 
 (def failures (atom 0))
@@ -136,7 +137,51 @@
                  (check "a tampered Range does not verify" false
                         (verify/constant-time-eq? (:signature parsed) sig)))))))
 
-;; ── 5. Pure layer, unchanged across runtimes ─────────────────────────────────
+;; ── 5. The composed signer — what Workers actually call ─────────────────────
+(def signer-base
+  {:endpoint "https://gateway.storjshare.io" :bucket "my-bucket" :region "us-east-1"
+   :access-key "jwtest" :secret-key "supersecret" :now "2026-07-25T12:00:00.000Z"})
+
+(defn- signature-of [signed]
+  (second (re-find #"Signature=([0-9a-f]+)" (get-in signed [:headers "authorization"]))))
+
+(defn check-request []
+  (-> (req/signed c (assoc signer-base :method :get :key "docs/readme.txt"))
+      (.then (fn [s]
+               (check "request/signed url"
+                      "https://gateway.storjshare.io/my-bucket/docs/readme.txt" (:url s))
+               (check "request/signed signature (matches JVM + independent impl)"
+                      "2f164e6a8b8805003436d9150ca22b2ed89f4bdcfa505bb0bcfe36d42d2ca528"
+                      (signature-of s))))
+      (.then (fn [_] (req/presigned c (assoc signer-base :key "docs/readme.txt"))))
+      (.then (fn [url]
+               (check "request/presigned"
+                      (str "https://gateway.storjshare.io/my-bucket/docs/readme.txt"
+                           "?X-Amz-Algorithm=AWS4-HMAC-SHA256"
+                           "&X-Amz-Credential=jwtest%2F20260725%2Fus-east-1%2Fs3%2Faws4_request"
+                           "&X-Amz-Date=20260725T120000Z"
+                           "&X-Amz-Expires=3600"
+                           "&X-Amz-SignedHeaders=host"
+                           "&X-Amz-Signature=8890b75c4127c944b41ade4dcacb46afd437ab9ce89678bf3d9139c9e1b78fb9")
+                      url)))
+      ;; the property nine diverging copies could not hold: what we sign, we accept
+      (.then (fn [_] (req/signed c (assoc signer-base :method :put
+                                          :key "docs/日本語 file (1).pdf" :body "payload"))))
+      (.then (fn [s]
+               (let [parsed (verify/parse-authorization (get-in s [:headers "authorization"]))]
+                 (-> (verify/expected-signature
+                      c {:secret-key (:secret-key signer-base)
+                         :parsed parsed
+                         :amz-date (get-in s [:headers "x-amz-date"])
+                         :payload-hash (get-in s [:headers "x-amz-content-sha256"])
+                         :request {:method :put
+                                   :path (v4/object-path "my-bucket" "docs/日本語 file (1).pdf")
+                                   :query nil
+                                   :headers (:headers s)}})
+                     (.then #(check "sign -> verify round-trip on a non-ASCII key" true
+                                    (verify/constant-time-eq? (:signature parsed) %)))))))))
+
+;; ── 6. Pure layer, unchanged across runtimes ─────────────────────────────────
 (defn check-pure []
   (check "uri-encode does not exempt !'()*" "%21%27%28%29%2A" (v4/uri-encode "!'()*"))
   (check "uri-encode emits UTF-8 bytes" "%E6%97%A5" (v4/uri-encode "日"))
@@ -153,6 +198,7 @@
     (.then check-aws-header-vector)
     (.then check-aws-presign-vector)
     (.then check-verify)
+    (.then check-request)
     (.then (fn [_]
              (println)
              (if (zero? @failures)

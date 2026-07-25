@@ -7,6 +7,7 @@ surface in this workspace.
 | Namespace | What it owns |
 |---|---|
 | `sigv4.core` | The pure half — encoding, canonicalization, credential scope, string-to-sign, presign params. No crypto, no clock, no I/O. |
+| `sigv4.request` | The composed signer: config in, `{:url :headers}` out. Presigned URLs too. |
 | `sigv4.verify` | The server side — parse `Authorization`, recompute the expected signature, compare in constant time. |
 | `sigv4.crypto` | Optional default `ICrypto` (`javax.crypto` / WebCrypto). |
 | `sigv4.protocols` | The one host seam: `ICrypto`. |
@@ -38,23 +39,22 @@ places for that to be true and one place where anyone would notice.
 ## Usage
 
 ```clojure
-(require '[sigv4.core :as v4]
-         '[sigv4.crypto :as crypto]
-         '[sigv4.protocols :as p])
+(require '[sigv4.crypto :as crypto]
+         '[sigv4.request :as req])
 
 (def c (crypto/crypto))
 
-;; sign
-(let [{:keys [canonical-request signed-headers]}
-      (v4/canonical-request {:method :get
-                             :path (v4/object-path "my-bucket" "docs/a.txt")
-                             :query ""
-                             :headers {"host" "gateway.storjshare.io"
-                                       "x-amz-content-sha256" v4/empty-payload-sha256
-                                       "x-amz-date" "20260725T120000Z"}
-                             :payload-hash v4/empty-payload-sha256})
-      scope (v4/credential-scope "20260725" "us-east-1")]
-  (v4/string-to-sign "20260725T120000Z" scope (p/-sha256-hex c canonical-request)))
+;; sign a request — endpoint-agnostic: B2, R2, Storj and S3 all speak this
+(req/signed c {:endpoint "https://gateway.storjshare.io"
+               :bucket "my-bucket" :region "us-east-1"
+               :access-key "…" :secret-key "…"
+               :method :put :key "docs/a.txt" :body "hello"
+               :headers {"content-type" "text/plain"}
+               :now (str (java.time.Instant/now))})
+;; => {:method "PUT" :url "https://…/my-bucket/docs/a.txt" :headers {…} :body "hello"}
+
+(req/presigned c (assoc config :key "docs/a.txt" :expires-seconds 900))
+;; => "https://…?X-Amz-Algorithm=…&X-Amz-Signature=…"
 
 ;; verify
 (require '[sigv4.verify :as verify])
@@ -107,8 +107,11 @@ back to us.
   **signature** AWS documents for its two worked S3 examples — header auth
   (`f0e8bdb8…`) and query-string auth (`aeeed9bb…`).
 - **Signing closed against verification.** `verify_test` signs AWS's example and
-  then verifies it. A drift between the two halves fails there rather than in
-  production as an unexplained 403.
+  then verifies it, and `request_test` round-trips the composed signer through
+  the verifier on ASCII, non-ASCII, reserved-character and extra-header keys.
+  A drift between the two halves fails there rather than in production as an
+  unexplained 403 — which is precisely what nine independent copies could not
+  guarantee about each other.
 - **Two-runtime parity.** `nbb scripts/verify-cljs.cljs` re-runs the
   load-bearing assertions on WebCrypto, where the async path through `then` is
   genuinely different code. Most consumers of this library run in Workers.
