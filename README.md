@@ -78,6 +78,13 @@ the count stops being repeated:
 (req/presigned c (assoc config :key "docs/a.txt" :expires-seconds 900))
 ;; => "https://…?X-Amz-Algorithm=…&X-Amz-Signature=…"
 
+;; a presigned PUT that binds its size, and the headers the client must send
+(req/presigned-request c (assoc config :method :put :key "docs/a.txt"
+                                :headers {"content-length" "12345"}))
+;; => {:url "https://…&X-Amz-SignedHeaders=content-length%3Bhost&X-Amz-Signature=…"
+;;     :method :put :headers {"content-length" "12345"}
+;;     :signed-headers "content-length;host" :expires-seconds 3600}
+
 ;; verify
 (require '[sigv4.verify :as verify])
 (let [parsed (verify/parse-authorization (get-in req [:headers "authorization"]))
@@ -88,6 +95,20 @@ the count stops being repeated:
                                              :request req})]
   (verify/constant-time-eq? (:signature parsed) expected))
 ```
+
+## A presigned URL is a capability, and `:headers` gives it a shape
+
+`presigned` signs only `host`, which is what makes the URL usable from a
+browser — and also what makes a presigned PUT a blank cheque: whoever holds it
+may store any number of bytes under a key whose content they never had to
+know. `presigned-request` signs whatever you put in `:headers` as well, and
+returns them so the client can send them back.
+
+Listing a header in the request while signing only `host` binds nothing. The
+constraint has to be in the signature: a holder who sends a different
+`content-length` computes a different signature and the store rejects the
+upload. `test/sigv4/request_test.clj` pins both signatures — the bound one and
+the one a 99999-byte body would need — from an independent implementation.
 
 Signing an S3 object store end to end — client, endpoint validation, presigned
 URLs — is [`kotoba-lang/io-storj`](https://github.com/kotoba-lang/io-storj),

@@ -111,3 +111,55 @@
                                    :query nil
                                    :headers (:headers s)}})]
         (is (verify/constant-time-eq? (:signature parsed) expected) label)))))
+
+;; ── presigned URLs that bind more than the host ─────────────────────────────
+;; Same methodology as the vectors above: the expected signature was produced
+;; by an independent implementation (Node's `crypto`, driven straight from the
+;; SigV4 spec), so this is a cross-check and not a snapshot of our own output.
+
+(deftest presigned-request-signs-the-headers-it-is-given
+  (let [r (req/presigned-request c (assoc base :method :put :key "docs/readme.txt"
+                                          :headers {"Content-Length" 12345}))]
+    (testing "the signed-header list reaches the query, sorted and encoded"
+      (is (str/includes? (:url r) "X-Amz-SignedHeaders=content-length%3Bhost"))
+      (is (= "content-length;host" (:signed-headers r))))
+    (testing "and the client is told exactly what it must send back"
+      (is (= {"content-length" "12345"} (:headers r)))
+      (is (not (contains? (:headers r) "host"))
+          "host is set by the HTTP client itself; fetch() cannot set it"))
+    (is (str/ends-with?
+         (:url r)
+         "&X-Amz-Signature=c676b0f6f3fa7ac36059fefc5050a3df4e6c697d56fbcd7419443de7cc69f3fa"))))
+
+(deftest a-bound-grant-is-not-a-blank-cheque
+  (testing "a holder who sends a different content-length than the one signed
+            computes a different signature, so the store rejects the upload —
+            this is the property that makes a presigned PUT a capability with
+            a shape rather than permission to store any number of bytes"
+    (let [signed-for-12345 (req/presigned-request
+                            c (assoc base :method :put :key "docs/readme.txt"
+                                     :headers {"content-length" 12345}))
+          signed-for-99999 (req/presigned-request
+                            c (assoc base :method :put :key "docs/readme.txt"
+                                     :headers {"content-length" 99999}))
+          sig-of #(second (re-find #"X-Amz-Signature=([0-9a-f]+)" (:url %)))]
+      (is (= "c676b0f6f3fa7ac36059fefc5050a3df4e6c697d56fbcd7419443de7cc69f3fa"
+             (sig-of signed-for-12345)))
+      (is (= "0c526af0c848e5c1bd6fb62debbc6e90bf9e6970638f4e13903926702982b913"
+             (sig-of signed-for-99999))
+          "the second value is what the SAME url would have to be signed with
+           for a 99999-byte body — computed independently, and different")
+      (is (not= (sig-of signed-for-12345) (sig-of signed-for-99999))))))
+
+(deftest presigned-still-returns-a-bare-url
+  (testing "the old single-arity contract is unchanged for callers that sign
+            nothing but the host"
+    (is (= (req/presigned c (assoc base :key "docs/readme.txt"))
+           (:url (req/presigned-request c (assoc base :key "docs/readme.txt")))))))
+
+(deftest a-caller-cannot-sign-a-host-the-url-does-not-point-at
+  (let [r (req/presigned-request c (assoc base :key "a.txt"
+                                          :headers {"host" "evil.example"}))]
+    (is (str/starts-with? (:url r) "https://gateway.storjshare.io/"))
+    (is (= "host" (:signed-headers r))
+        "the caller's host is overwritten by the endpoint's, not appended")))
