@@ -84,33 +84,57 @@
                                                           (p/-hex crypto sig)))
                                          :body    body}))))))))))))
 
-(defn presigned
-  "Presigned URL — a bare `https://…?X-Amz-…` anyone can fetch until it expires,
-  with no credentials on the wire. → a URL string (a Promise of one on JS).
+(defn presigned-request
+  "Presigned URL, plus the headers a client MUST send with it.
 
-  Only `host` is signed, so the URL works from a browser. `:expires-seconds`
-  defaults to 3600 and is capped by S3 at 604800 (7 days)."
+  → `{:url :method :headers :signed-headers :expires-seconds}` (a Promise of
+  it on JS). `presigned` is this without the envelope, for the common case.
+
+  `host` is always signed, which is what lets the URL work from a browser.
+  Anything in `:headers` is signed TOO, and that is the difference between a
+  URL and a capability with a shape:
+
+      (presigned-request c {… :method :put :headers {\"content-length\" \"12345\"}})
+
+  Without it, a presigned PUT is a blank cheque — whoever holds the URL may
+  store any number of bytes under a key whose content they never had to know.
+  Listing a header in the request while signing only `host` binds nothing;
+  the constraint has to be in the signature, and the returned `:headers` are
+  exactly what the client has to send back for that signature to verify.
+
+  `:expires-seconds` defaults to 3600 and is capped by S3 at 604800 (7 days)."
   [crypto {:keys [endpoint bucket region service access-key secret-key
-                  method key query now expires-seconds]
+                  method key query headers now expires-seconds]
            :or   {method :get expires-seconds 3600 service v4/default-service}}]
   (let [origin (str/replace (str endpoint) #"/+$" "")
         host   (host-of origin)
+        ;; `host` last: a caller cannot sign a host the URL does not point at.
+        hs     (-> (into {} (map (fn [[k v]] [(str/lower-case (name k)) (str/trim (str v))]))
+                         headers)
+                   (assoc "host" host))
         {:keys [long short]} (v4/amz-dates now)
         scope  (v4/credential-scope short region service)
         path   (v4/object-path bucket key)
+        canonical (fn [qs] (v4/canonical-request {:method       method
+                                                  :path         path
+                                                  :query        qs
+                                                  :headers      hs
+                                                  :payload-hash v4/unsigned-payload}))
+        ;; X-Amz-SignedHeaders is a QUERY parameter, so the header list has to
+        ;; exist before the canonical query does. Take it from the same
+        ;; function that will build the canonical request rather than sorting
+        ;; the keys again here — two orderings that must agree are two
+        ;; orderings that can drift, and the symptom would be a 403 with no
+        ;; local reproduction.
+        signed (:signed-headers (canonical ""))
         qs     (v4/canonical-query
                 (merge query
                        (v4/presign-params {:key-id          access-key
                                            :scope           scope
                                            :long-date       long
                                            :expires-seconds expires-seconds
-                                           :signed-headers  "host"})))
-        {:keys [canonical-request]}
-        (v4/canonical-request {:method       method
-                               :path         path
-                               :query        qs
-                               :headers      {"host" host}
-                               :payload-hash v4/unsigned-payload})]
+                                           :signed-headers  signed})))
+        {:keys [canonical-request]} (canonical qs)]
     (then (p/-sha256-hex crypto canonical-request)
           (fn [cr-hash]
             (let [sts (v4/string-to-sign long scope cr-hash)]
@@ -118,5 +142,27 @@
                     (fn [k]
                       (then (p/-hmac crypto k sts)
                             (fn [sig]
-                              (str origin path "?" qs
-                                   "&X-Amz-Signature=" (p/-hex crypto sig)))))))))))
+                              {:url (str origin path "?" qs
+                                         "&X-Amz-Signature=" (p/-hex crypto sig))
+                               :method method
+                               ;; host is set by the HTTP client itself; a
+                               ;; fetch() cannot set it and does not need to.
+                               :headers (dissoc hs "host")
+                               :signed-headers signed
+                               :expires-seconds expires-seconds})))))))))
+
+(defn presigned
+  "Presigned URL — a bare `https://…?X-Amz-…` anyone can fetch until it expires,
+  with no credentials on the wire. → a URL string (a Promise of one on JS).
+
+  Only `host` is signed unless you pass `:headers`, in which case use
+  `presigned-request` instead: it returns the headers the client must send,
+  and a signed header the client does not know about is a URL that 403s."
+  [crypto opts]
+  ;; `(fn [r] (:url r))`, not the bare `:url` keyword. On the JVM `then`
+  ;; applies f itself and a keyword works; on JS it becomes
+  ;; `promise.then(kw)`, and a ClojureScript Keyword is an object rather than
+  ;; `typeof "function"` — so the Promise spec IGNORES it and resolves with
+  ;; the input unchanged. The JVM suite passed while cljs handed back the
+  ;; whole map; `scripts/verify-cljs.cljs` is what caught it.
+  (then (presigned-request crypto opts) (fn [r] (:url r))))

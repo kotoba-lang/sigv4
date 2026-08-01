@@ -164,6 +164,20 @@
                            "&X-Amz-SignedHeaders=host"
                            "&X-Amz-Signature=8890b75c4127c944b41ade4dcacb46afd437ab9ce89678bf3d9139c9e1b78fb9")
                       url)))
+      ;; a presigned PUT that binds its size — same expected signature as the
+      ;; JVM suite and the independent Node implementation, so the cljs path
+      ;; cannot quietly sign a different string
+      (.then (fn [_] (req/presigned-request c (assoc signer-base :method :put
+                                                     :key "docs/readme.txt"
+                                                     :headers {"Content-Length" 12345}))))
+      (.then (fn [r]
+               (check "request/presigned-request signed-headers"
+                      "content-length;host" (:signed-headers r))
+               (check "request/presigned-request headers echoed to the client"
+                      {"content-length" "12345"} (:headers r))
+               (check "request/presigned-request signature (matches JVM + independent impl)"
+                      "c676b0f6f3fa7ac36059fefc5050a3df4e6c697d56fbcd7419443de7cc69f3fa"
+                      (second (re-find #"X-Amz-Signature=([0-9a-f]+)" (:url r))))))
       ;; the property nine diverging copies could not hold: what we sign, we accept
       (.then (fn [_] (req/signed c (assoc signer-base :method :put
                                           :key "docs/日本語 file (1).pdf" :body "payload"))))
