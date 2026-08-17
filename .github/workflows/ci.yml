@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install -g nbb
-      - run: nbb scripts/verify-cljs.cljs
+      - run: nbb run-tests.cljs
 
   kotoba:
     # Compile the Kotoba percent-encoder with the checksum-verified released
