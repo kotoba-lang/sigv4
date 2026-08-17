@@ -161,7 +161,7 @@ back to us.
   library both signs their outbound S3 requests and verifies the inbound ones
   they accept. Measured 2026-08-17: corrupting the ClojureScript HMAC key by
   one character fails 7 assertions here and **none** of the 93 on the JVM.
-- **Kotoba/Wasm parity.** `nbb scripts/verify-kotoba.cljs` requires the Kotoba
+- **Kotoba/Wasm parity.** `nbb kotoba-tests.cljs` requires the Kotoba
   implementation and the Clojure one to agree byte for byte across 147 inputs.
 
 All four run in CI.
@@ -169,7 +169,7 @@ All four run in CI.
 ```bash
 clojure -M:test                 # JVM
 nbb run-tests.cljs              # ClojureScript / WebCrypto
-nbb scripts/verify-kotoba.cljs  # Kotoba/Wasm vs Clojure  (needs target/pct_encode.wasm)
+nbb kotoba-tests.cljs           # Kotoba/Wasm vs Clojure (builds the module itself)
 clojure -M:lint
 ```
 
@@ -187,10 +187,15 @@ byte-to-byte work — no maps, no sorting, no host capability. It runs on `alloc
 self-recursion in place of a loop form.
 
 ```bash
-kotoba wasm emit kotoba/pct_encode.kotoba --package-lock kotoba.lock.edn \
-  --output target/pct_encode.wasm --json
-nbb scripts/verify-kotoba.cljs
+nbb kotoba-tests.cljs   # emits the module, then compares 147 inputs
 ```
+
+The suite invokes the CLI itself rather than assuming a built module, and
+**fails when the CLI is absent** — a parity check that was skipped must not
+report what a satisfied one reports. That is not hypothetical: the module had
+been failing to build since the language grew its T1 memory-safety gate
+(`raw-memory-denied` on `mem-byte-at` / `byte-store!`), and nothing said so
+because nothing ran it.
 
 **What is not in Kotoba, and why.** The rest of SigV4 — sorting headers,
 canonical query assembly, string-to-sign — needs maps, string collections and a

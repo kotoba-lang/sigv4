@@ -66,4 +66,4 @@ jobs:
           "$RUNNER_TEMP/kotoba/kotoba" wasm emit kotoba/pct_encode.kotoba \
             --package-lock kotoba.lock.edn --output target/pct_encode.wasm --json
       - name: Kotoba/Wasm vs Clojure parity
-        run: nbb scripts/verify-kotoba.cljs
+        run: nbb kotoba-tests.cljs
