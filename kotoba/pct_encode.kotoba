@@ -13,7 +13,19 @@
 ;; does support multi-module has no admitted lowering for `alloc` /
 ;; `mem-byte-at` / `byte-store!`. So the classifier is inlined here rather than
 ;; split out the way io-ipfs's ESM pilot splits its bounds module.
+;; `:kotoba/raw-memory` is required as of the T1 memory-safety gate: raw
+;; linear-memory access (`mem-byte-at`, `byte-store!`) is denied in user source
+;; unless the module declares why it needs it. This one is a wire protocol —
+;; the encoder walks input bytes and writes output bytes into a scratch region,
+;; which is the case the gate's own hint names as admissible.
+;;
+;; Added 2026-08-17. The gate landed some time before that and this file did
+;; not follow, so `kotoba wasm emit` had been failing `check-failed` and the
+;; Kotoba/Clojure parity check could not run at all. Nothing noticed because
+;; nothing ran it: this repo's Actions are off (ADR-2607300900) and it had no
+;; fleet gate until today.
 (ns sigv4.pct-encode
+  {:kotoba/raw-memory "byte-for-byte wire encoding into a scratch region"}
   (:export [scratch encode main]))
 
 ;; A-Z a-z 0-9 - _ . ~  → 1, everything else → 0.
