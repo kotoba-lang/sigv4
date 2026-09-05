@@ -105,7 +105,13 @@
   `:expires-seconds` defaults to 3600 and is capped by S3 at 604800 (7 days)."
   [crypto {:keys [endpoint bucket region service access-key secret-key
                   method key query headers now expires-seconds]
-           :or   {method :get expires-seconds 3600 service v4/default-service}}]
+           :or   {method :get expires-seconds 3600 service v4/default-service
+                  ;; A presign without a timestamp signs an EMPTY X-Amz-Date,
+                  ;; which every real S3 endpoint answers 403 AccessDenied to
+                  ;; (measured live against B2 2026-09-05). The reference
+                  ;; vectors pass :now explicitly; a production caller that
+                  ;; forgot it used to fail only in production.
+                  now #?(:cljs (.toISOString (js/Date.)) :clj (str (java.time.Instant/now)))}}]
   (let [origin (str/replace (str endpoint) #"/+$" "")
         host   (host-of origin)
         ;; `host` last: a caller cannot sign a host the URL does not point at.
