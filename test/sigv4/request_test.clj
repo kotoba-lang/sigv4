@@ -7,7 +7,7 @@
   them a cross-check and not a snapshot.
 
   JVM-only; the async path is covered by `scripts/verify-cljs.cljs`."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is testing]]
             [sigv4.core :as v4]
             [sigv4.crypto :as crypto]
