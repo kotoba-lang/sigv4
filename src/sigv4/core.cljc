@@ -21,7 +21,7 @@
   async, its choice — without this namespace ever touching a cipher.
 
   Spec: https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html"
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def algorithm "AWS4-HMAC-SHA256")
 
@@ -145,12 +145,12 @@
   `unsigned-payload`) and must match the `x-amz-content-sha256` header you send."
   [{:keys [method path query headers payload-hash]}]
   (let [hs     (->> headers
-                    (map (fn [[k v]] [(str/lower-case (name k)) (str/trim (str v))]))
+                    (map (fn [[k v]] [(str/lower (name k)) (str/trim (str v))]))
                     (sort-by first))
         signed (mapv first hs)]
     {:signed-headers (str/join ";" signed)
      :canonical-request
-     (str/join "\n" [(str/upper-case (name method))
+     (str/join "\n" [(str/upper (name method))
                      path
                      (or query "")
                      ;; each canonical header line ends in \n, so joining with

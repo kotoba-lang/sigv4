@@ -11,7 +11,7 @@
   Endpoint-agnostic. Backblaze B2, Cloudflare R2, Storj Gateway-MT and Amazon
   S3 all speak the same protocol here; which endpoint is legitimate is the
   caller's policy, not this namespace's."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [sigv4.core :as v4]
             [sigv4.protocols :as p]))
 
@@ -58,7 +58,7 @@
     (then (or payload-hash
               (if (some? body) (p/-sha256-hex crypto body) v4/empty-payload-sha256))
           (fn [payload-hash]
-            (let [headers (merge (into {} (map (fn [[k v]] [(str/lower-case (name k)) (str v)]))
+            (let [headers (merge (into {} (map (fn [[k v]] [(str/lower (name k)) (str v)]))
                                        headers)
                                  {"host"                 host
                                   "x-amz-content-sha256" payload-hash
@@ -76,7 +76,7 @@
                               (fn [k]
                                 (then (p/-hmac crypto k sts)
                                       (fn [sig]
-                                        {:method  (str/upper-case (name method))
+                                        {:method  (str/upper (name method))
                                          :url     (str origin path (when (seq qs) (str "?" qs)))
                                          :headers (assoc headers "authorization"
                                                          (v4/authorization-header
@@ -115,7 +115,7 @@
   (let [origin (str/replace (str endpoint) #"/+$" "")
         host   (host-of origin)
         ;; `host` last: a caller cannot sign a host the URL does not point at.
-        hs     (-> (into {} (map (fn [[k v]] [(str/lower-case (name k)) (str/trim (str v))]))
+        hs     (-> (into {} (map (fn [[k v]] [(str/lower (name k)) (str/trim (str v))]))
                          headers)
                    (assoc "host" host))
         {:keys [long short]} (v4/amz-dates now)

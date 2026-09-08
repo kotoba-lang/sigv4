@@ -10,7 +10,7 @@
 
   Pure except for the digest and HMAC, which arrive through `ICrypto` exactly as
   on the signing side."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [sigv4.core :as v4]
             [sigv4.protocols :as p]))
 
@@ -52,7 +52,7 @@
   headers participate and *in what order* — the client's claim, which is what
   makes the recomputation reproduce their signature or fail to."
   [req signed-headers payload-hash]
-  (str/join "\n" [(str/upper-case (name (:method req)))
+  (str/join "\n" [(str/upper (name (:method req)))
                   (or (:path req) "/")
                   (v4/canonical-query (:query req))
                   (v4/canonical-headers (:headers req) signed-headers)
