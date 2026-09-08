@@ -27,7 +27,7 @@
 
       npx nbb --classpath src:test kotoba-tests.cljs"
   (:require [cljs.test :as t :refer-macros [deftest is testing async]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             ["node:child_process" :as cp]
             ["node:fs" :as fs]
             [sigv4.core :as v4]))
