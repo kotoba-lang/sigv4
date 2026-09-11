@@ -23,7 +23,7 @@
   outputs cross-checked against the JVM suite and an independent Node
   implementation.
 
-      npx nbb run-tests.cljs"
+      npx nbb run-tests.cljk"
   (:require [cljs.test :as t :refer-macros [deftest is testing async]]
             [sigv4.core :as v4]
             [sigv4.core-test]

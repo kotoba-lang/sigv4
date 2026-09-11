@@ -6,7 +6,7 @@
   byte extraction. That is deliberate. SigV4 is famously easy to get wrong in
   the *string* layer (encoding rules, sort order, trailing newlines), and that
   layer is exactly the part that can be pinned by the published AWS reference
-  vectors — see `test/sigv4/core_test.cljc`, which asserts the documented
+  vectors — see `test/sigv4/core_test.cljk`, which asserts the documented
   canonical-request / string-to-sign / signature values byte for byte.
 
   The two impure ingredients SigV4 needs — SHA-256 and HMAC-SHA-256 — are NOT

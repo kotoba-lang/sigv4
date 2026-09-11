@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install -g nbb
-      - run: nbb run-tests.cljs
+      - run: nbb run-tests.cljk
 
   kotoba:
     # Compile the Kotoba percent-encoder with the checksum-verified released
@@ -66,4 +66,4 @@ jobs:
           "$RUNNER_TEMP/kotoba/kotoba" wasm emit kotoba/pct_encode.kotoba \
             --package-lock kotoba.lock.edn --output target/pct_encode.wasm --json
       - name: Kotoba/Wasm vs Clojure parity
-        run: nbb kotoba-tests.cljs
+        run: nbb kotoba-tests.cljk
