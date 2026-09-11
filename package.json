@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "verify:cljs": "nbb scripts/verify-cljs.cljs",
-    "verify:kotoba": "nbb scripts/verify-kotoba.cljs"
+    "verify:cljs": "kbb --backend sci scripts/verify-cljs.cljk",
+    "verify:kotoba": "kbb --backend sci scripts/verify-kotoba.cljk"
   }
 }

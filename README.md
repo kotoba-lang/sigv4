@@ -155,22 +155,22 @@ back to us.
   A drift between the two halves fails there rather than in production as an
   unexplained 403 — which is precisely what nine independent copies could not
   guarantee about each other.
-- **Two-runtime parity.** `nbb run-tests.cljk` re-runs the load-bearing
+- **Two-runtime parity.** `kbb --backend sci run-tests.cljk` re-runs the load-bearing
   assertions on WebCrypto, where the async path through `then` is genuinely
   different code. Most consumers of this library run in Workers, and this
   library both signs their outbound S3 requests and verifies the inbound ones
   they accept. Measured 2026-08-17: corrupting the ClojureScript HMAC key by
   one character fails 7 assertions here and **none** of the 93 on the JVM.
-- **Kotoba/Wasm parity.** `nbb kotoba-tests.cljk` requires the Kotoba
+- **Kotoba/Wasm parity.** `kbb --backend sci kotoba-tests.cljk` requires the Kotoba
   implementation and the Clojure one to agree byte for byte across 147 inputs.
 
 All four run in CI.
 
 ```bash
-clojure -M:test                 # JVM
-nbb run-tests.cljk              # ClojureScript / WebCrypto
-nbb kotoba-tests.cljk           # Kotoba/Wasm vs Clojure (builds the module itself)
-clojure -M:lint
+kbb -M:test                 # JVM
+kbb --backend sci run-tests.cljk              # ClojureScript / WebCrypto
+kbb --backend sci kotoba-tests.cljk           # Kotoba/Wasm vs Clojure (builds the module itself)
+kbb -M:lint
 ```
 
 ## The Kotoba implementation
@@ -187,7 +187,7 @@ byte-to-byte work — no maps, no sorting, no host capability. It runs on `alloc
 self-recursion in place of a loop form.
 
 ```bash
-nbb kotoba-tests.cljk   # emits the module, then compares 147 inputs
+kbb --backend sci kotoba-tests.cljk   # emits the module, then compares 147 inputs
 ```
 
 The suite invokes the CLI itself rather than assuming a built module, and

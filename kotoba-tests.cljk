@@ -25,7 +25,7 @@
   gate, so this comparison could not run at all, and nothing said so because
   nothing ran it.
 
-      npx nbb --classpath src:test kotoba-tests.cljk"
+      kbb --backend sci --classpath src:test kotoba-tests.cljk"
   (:require [cljs.test :as t :refer-macros [deftest is testing async]]
             [kotoba.lang.text :as str]
             ["node:child_process" :as cp]
