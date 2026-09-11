@@ -1,7 +1,7 @@
 (ns run-tests
   "The suite under ClojureScript, as `clojure.test`.
 
-  `clojure -M:test` proves this library on the JVM, where crypto is synchronous
+  `kbb -M:test` proves this library on the JVM, where crypto is synchronous
   and every `then` is plain application. That leaves the half that actually
   ships -- browsers and Cloudflare Workers, where WebCrypto is Promise-based,
   so the *same* source takes a completely different path. A green JVM suite
@@ -23,7 +23,7 @@
   outputs cross-checked against the JVM suite and an independent Node
   implementation.
 
-      npx nbb run-tests.cljk"
+      kbb --backend sci run-tests.cljk"
   (:require [cljs.test :as t :refer-macros [deftest is testing async]]
             [sigv4.core :as v4]
             [sigv4.core-test]
