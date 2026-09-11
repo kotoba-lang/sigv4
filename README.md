@@ -107,7 +107,7 @@ returns them so the client can send them back.
 Listing a header in the request while signing only `host` binds nothing. The
 constraint has to be in the signature: a holder who sends a different
 `content-length` computes a different signature and the store rejects the
-upload. `test/sigv4/request_test.clj` pins both signatures — the bound one and
+upload. `test/sigv4/request_test.cljk` pins both signatures — the bound one and
 the one a 99999-byte body would need — from an independent implementation.
 
 Signing an S3 object store end to end — client, endpoint validation, presigned
@@ -155,21 +155,21 @@ back to us.
   A drift between the two halves fails there rather than in production as an
   unexplained 403 — which is precisely what nine independent copies could not
   guarantee about each other.
-- **Two-runtime parity.** `nbb run-tests.cljs` re-runs the load-bearing
+- **Two-runtime parity.** `nbb run-tests.cljk` re-runs the load-bearing
   assertions on WebCrypto, where the async path through `then` is genuinely
   different code. Most consumers of this library run in Workers, and this
   library both signs their outbound S3 requests and verifies the inbound ones
   they accept. Measured 2026-08-17: corrupting the ClojureScript HMAC key by
   one character fails 7 assertions here and **none** of the 93 on the JVM.
-- **Kotoba/Wasm parity.** `nbb kotoba-tests.cljs` requires the Kotoba
+- **Kotoba/Wasm parity.** `nbb kotoba-tests.cljk` requires the Kotoba
   implementation and the Clojure one to agree byte for byte across 147 inputs.
 
 All four run in CI.
 
 ```bash
 clojure -M:test                 # JVM
-nbb run-tests.cljs              # ClojureScript / WebCrypto
-nbb kotoba-tests.cljs           # Kotoba/Wasm vs Clojure (builds the module itself)
+nbb run-tests.cljk              # ClojureScript / WebCrypto
+nbb kotoba-tests.cljk           # Kotoba/Wasm vs Clojure (builds the module itself)
 clojure -M:lint
 ```
 
@@ -187,7 +187,7 @@ byte-to-byte work — no maps, no sorting, no host capability. It runs on `alloc
 self-recursion in place of a loop form.
 
 ```bash
-nbb kotoba-tests.cljs   # emits the module, then compares 147 inputs
+nbb kotoba-tests.cljk   # emits the module, then compares 147 inputs
 ```
 
 The suite invokes the CLI itself rather than assuming a built module, and
